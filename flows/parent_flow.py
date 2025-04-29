@@ -1,8 +1,7 @@
 import logging
-from typing import Dict, Any, List, Optional, Union
 from enum import Enum
 
-import asyncio
+
 from prefect import flow, task, get_run_logger
 
 # Import existing flow implementations
@@ -45,8 +44,8 @@ def determine_best_environment(hpc_type: str, params_list: list[dict]) -> FlowTy
     elif hpc_type == "nsls-ii":
         logger.info(f"HPC type is NSLS-II, selecting PODMAN")
         return FlowType.podman
-    elif hpc_type == "als" or hpc_type == "cluster-ball":
-        logger.info(f"HPC type is ALS/cluster-ball, selecting DOCKER")
+    elif hpc_type == "als":
+        logger.info(f"HPC type is ALS cluster-ball, selecting DOCKER")
         return FlowType.docker
     elif hpc_type in [ft.value for ft in FlowType]:
         # If the hpc_type is actually a flow type, use it directly
