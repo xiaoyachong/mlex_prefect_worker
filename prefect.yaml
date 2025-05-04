@@ -17,7 +17,7 @@ deployments:
   entrypoint: flows/podman/podman_flows.py:launch_podman
   parameters: {}
   work_pool:
-    name: mlex_pool
+    name: podman_pool
     work_queue_name: default-queue
     job_variables: {}
   schedule:
@@ -25,11 +25,11 @@ deployments:
 - name: launch_conda
   version: 0.1.0
   tags: []
-  description: Launch podman container
+  description: Launch conda environment
   entrypoint: flows/conda/conda_flows.py:launch_conda
   parameters: {}
   work_pool:
-    name: mlex_pool
+    name: conda_pool
     work_queue_name: default-queue
     job_variables: {}
   schedule:
@@ -41,7 +41,7 @@ deployments:
   entrypoint: flows/slurm/slurm_flows.py:launch_slurm
   parameters: {}
   work_pool:
-    name: mlex_pool
+    name: slurm_pool
     work_queue_name: default-queue
     job_variables: {}
   schedule:
@@ -53,7 +53,7 @@ deployments:
   entrypoint: flows/docker/docker_flows.py:launch_docker
   parameters: {}
   work_pool:
-    name: mlex_pool
+    name: docker_pool
     work_queue_name: default-queue
     job_variables: {}
   schedule:

@@ -1,14 +1,11 @@
 import logging
 from enum import Enum
 
-
 from prefect import flow, task, get_run_logger
+from prefect.deployments import run_deployment
 
-# Import existing flow implementations
-from flows.conda.conda_flows import launch_conda
-from flows.docker.docker_flows import launch_docker
-from flows.podman.podman_flows import launch_podman
-from flows.slurm.slurm_flows import launch_slurm
+
+# Import schema classes for validation
 from flows.conda.schema import CondaParams
 from flows.docker.schema import DockerParams
 from flows.podman.schema import PodmanParams
@@ -23,13 +20,12 @@ class FlowType(str, Enum):
     docker = "docker"
 
 @task
-def determine_best_environment(hpc_type: str, params_list: list[dict]) -> FlowType:
+def determine_best_environment(hpc_type: str) -> FlowType:
     """
     Determine the best execution environment based on hpc_type
     
     Args:
         hpc_type: Type of HPC to execute on
-        params_list: List of job parameters
     
     Returns:
         Best flow type to use
@@ -57,7 +53,7 @@ def determine_best_environment(hpc_type: str, params_list: list[dict]) -> FlowTy
 
 @flow(name="Parent flow")
 async def launch_parent_flow(
-    hpc_type: str,
+    flow_type: FlowType,
     params_list: list[dict],
 ):
     """
@@ -65,20 +61,25 @@ async def launch_parent_flow(
     based on the HPC type.
     
     Args:
-        hpc_type: Type of HPC to execute on
+        flow_type: Not used--delete it later
         params_list: List of parameters for the job
     """
     prefect_logger = get_run_logger()
+    
+    # Hardcoded HPC type for now
+    hpc_type = "als"
     prefect_logger.info(f"Starting job router (parent flow) for HPC: {hpc_type}")
     
     # Auto-select environment based on hpc_type
-    target_env = determine_best_environment(hpc_type, params_list)
+    target_env = determine_best_environment(hpc_type)
     prefect_logger.info(f"Selected target environment: {target_env}")
     
     # Execute each step in sequence based on the selected environment
     flow_run_id = ""
     
     for i, params in enumerate(params_list):
+        prefect_logger.info(f"Running step {i+1} of {len(params_list)}")
+        
         if target_env == FlowType.conda:
             # Extract only conda-relevant parameters
             conda_relevant_params = {
@@ -86,12 +87,26 @@ async def launch_parent_flow(
                 "python_file_name": params["python_file_name"],
                 "params": params.get("params", {})
             }
-            # Create CondaParams object with only relevant parameters
+            
+            # Validate parameters with the schema
             conda_params = CondaParams(**conda_relevant_params)
-            flow_run_id = await launch_conda(
-                conda_params=conda_params,
-                prev_flow_run_id=flow_run_id
+            
+            # If there's a previous flow run ID, set it in the parameters
+            if flow_run_id:
+                if "io_parameters" not in conda_params.params:
+                    conda_params.params["io_parameters"] = {}
+                conda_params.params["io_parameters"]["uid_retrieve"] = flow_run_id
+            
+            # Run the conda deployment with parameters
+            deployment_data = {
+                "conda_params": conda_params.dict(),
+                "prev_flow_run_id": flow_run_id
+            }
+            flow_run = await run_deployment(
+                name="launch_conda/launch_conda",
+                parameters=deployment_data
             )
+            flow_run_id = str(flow_run.id)
             
         elif target_env == FlowType.docker:
             # Extract only docker-relevant parameters
@@ -101,14 +116,29 @@ async def launch_parent_flow(
                 "command": params.get("command", "python src/train.py"),
                 "volumes": params.get("volumes", []),
                 "network": params.get("network", ""),
+                "env_vars": params.get("env_vars", {}),
                 "params": params.get("params", {})
             }
-            # Create DockerParams object with only relevant parameters
+            
+            # Validate parameters with the schema
             docker_params = DockerParams(**docker_relevant_params)
-            flow_run_id = await launch_docker(
-                docker_params=docker_params,
-                prev_flow_run_id=flow_run_id
+            
+            # If there's a previous flow run ID, set it in the parameters
+            if flow_run_id:
+                if "io_parameters" not in docker_params.params:
+                    docker_params.params["io_parameters"] = {}
+                docker_params.params["io_parameters"]["uid_retrieve"] = flow_run_id
+            
+            # Run the docker deployment with parameters
+            deployment_data = {
+                "docker_params": docker_params.dict(),
+                "prev_flow_run_id": flow_run_id
+            }
+            flow_run = await run_deployment(
+                name="Docker flow/launch_docker",
+                parameters=deployment_data
             )
+            flow_run_id = str(flow_run.id)
             
         elif target_env == FlowType.podman:
             # Extract only podman-relevant parameters
@@ -118,14 +148,29 @@ async def launch_parent_flow(
                 "command": params.get("command", "python src/train.py"),
                 "volumes": params.get("volumes", []),
                 "network": params.get("network", ""),
+                "env_vars": params.get("env_vars", {}),
                 "params": params.get("params", {})
             }
-            # Create PodmanParams object with only relevant parameters
+            
+            # Validate parameters with the schema
             podman_params = PodmanParams(**podman_relevant_params)
-            flow_run_id = await launch_podman(
-                podman_params=podman_params,
-                prev_flow_run_id=flow_run_id
+            
+            # If there's a previous flow run ID, set it in the parameters
+            if flow_run_id:
+                if "io_parameters" not in podman_params.params:
+                    podman_params.params["io_parameters"] = {}
+                podman_params.params["io_parameters"]["uid_retrieve"] = flow_run_id
+            
+            # Run the podman deployment with parameters
+            deployment_data = {
+                "podman_params": podman_params.dict(),
+                "prev_flow_run_id": flow_run_id
+            }
+            flow_run = await run_deployment(
+                name="Podman flow/launch_podman", 
+                parameters=deployment_data
             )
+            flow_run_id = str(flow_run.id)
             
         elif target_env == FlowType.slurm:
             # Extract only slurm-relevant parameters
@@ -141,15 +186,32 @@ async def launch_parent_flow(
                 "python_file_name": params.get("python_file_name", "src/train.py"),
                 "params": params.get("params", {})
             }
-            # Create SlurmParams object with only relevant parameters
+            
+            # Validate parameters with the schema
             slurm_params = SlurmParams(**slurm_relevant_params)
-            flow_run_id = await launch_slurm(
-                slurm_params=slurm_params,
-                prev_flow_run_id=flow_run_id
+            
+            # If there's a previous flow run ID, set it in the parameters
+            if flow_run_id:
+                if "io_parameters" not in slurm_params.params:
+                    slurm_params.params["io_parameters"] = {}
+                slurm_params.params["io_parameters"]["uid_retrieve"] = flow_run_id
+            
+            # Run the slurm deployment with parameters
+            deployment_data = {
+                "slurm_params": slurm_params.dict(),
+                "prev_flow_run_id": flow_run_id
+            }
+            flow_run = await run_deployment(
+                name="launch_slurm/launch_slurm",
+                parameters=deployment_data
             )
+            flow_run_id = str(flow_run.id)
             
         else:
             prefect_logger.error("Flow type not supported")
             raise ValueError("Flow type not supported")
+            
+        prefect_logger.info(f"Step {i+1} completed with flow run ID: {flow_run_id}")
     
-    pass
+    prefect_logger.info(f"All steps completed successfully. Final flow run ID: {flow_run_id}")
+    return flow_run_id
