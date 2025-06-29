@@ -1,6 +1,10 @@
 import logging
+import os
+import json
 from enum import Enum
 
+import mlflow
+from mlflow.tracking import MlflowClient
 from prefect import flow, task, get_run_logger
 from prefect.deployments import run_deployment
 from prefect.states import Failed
@@ -16,6 +20,11 @@ from flows.slurm.schema import SlurmParams
 
 logger = logging.getLogger(__name__)
 
+# MLflow connection parameters - load from environment variables
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "")
+MLFLOW_TRACKING_USERNAME = os.getenv("MLFLOW_TRACKING_USERNAME", "")
+MLFLOW_TRACKING_PASSWORD = os.getenv("MLFLOW_TRACKING_PASSWORD", "")
+
 class FlowType(str, Enum):
     podman = "podman"
     conda = "conda"
@@ -25,7 +34,7 @@ class FlowType(str, Enum):
 @task
 def determine_best_environment(hpc_type: str) -> FlowType:
     """
-    Determine the best execution environment based on hpc_type
+    Determine the best execution environment based on hpc_type.
     
     Args:
         hpc_type: Type of HPC to execute on
@@ -54,18 +63,99 @@ def determine_best_environment(hpc_type: str) -> FlowType:
         logger.info(f"Unknown HPC type: {hpc_type}, defaulting to CONDA environment")
         return FlowType.conda
 
-@flow(name="Parent flow")
-async def launch_parent_flow(
-    flow_type: FlowType,
-    params_list: list[dict],
-):
+@task
+def get_algorithm_details_from_mlflow(model_name: str):
     """
-    Smart job router that automatically selects the best execution environment
-    based on the HPC type.
+    Retrieve algorithm details from MLflow using the model name.
     
     Args:
-        flow_type: Not used--delete it later
-        params_list: List of parameters for the job
+        model_name: The name of the model in MLflow
+    
+    Returns:
+        Dictionary containing algorithm details
+    """
+    logger = get_run_logger()
+    logger.info(f"Retrieving details for model {model_name} from MLflow")
+    
+    # Log MLflow connection parameters for debugging
+    logger.info(f"MLflow Tracking URI: {MLFLOW_TRACKING_URI}")
+    logger.info(f"MLflow Username: {'Set' if MLFLOW_TRACKING_USERNAME else 'Not set'}")
+    logger.info(f"MLflow Password: {'Set' if MLFLOW_TRACKING_PASSWORD else 'Not set'}")
+    
+    # Set MLflow connection
+    os.environ["MLFLOW_TRACKING_USERNAME"] = MLFLOW_TRACKING_USERNAME
+    os.environ["MLFLOW_TRACKING_PASSWORD"] = MLFLOW_TRACKING_PASSWORD
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+    
+    try:
+        client = MlflowClient()
+        
+        # Add additional logging to list all registered models
+        try:
+            all_models = client.search_registered_models()
+            logger.info(f"Found {len(all_models)} registered models in MLflow:")
+            for rm in all_models:
+                logger.info(f"  - {rm.name}")
+        except Exception as e:
+            logger.warning(f"Could not list registered models: {str(e)}")
+        
+        # Get the latest version of the model
+        logger.info(f"Attempting to get latest versions for model: {model_name}")
+        versions = client.get_latest_versions(model_name)
+        if not versions:
+            logger.error(f"No versions found for model {model_name}")
+            raise ValueError(f"Model {model_name} not found in MLflow")
+            
+        version = versions[0]
+        logger.info(f"Found version {version.version} for model {model_name}")
+        
+        # Get the run to access parameters
+        run = client.get_run(version.run_id)
+        logger.info(f"Retrieved run with ID: {run.info.run_id}")
+        
+        # Extract the relevant parameters
+        params = run.data.params
+        tags = run.data.tags
+        
+        # Get relevant fields from MLflow params
+        algorithm_details = {
+            "model_name": model_name,
+            "image_name": params.get("image_name", ""),
+            "image_tag": params.get("image_tag", ""),
+            "conda_env": params.get("conda_env", ""),
+            "network": params.get("network", ""),
+            "volumes": params.get("volumes", "[]"),
+            "num_nodes": int(params.get("num_nodes", 1)),
+            "partitions": params.get("partitions", "[]"),
+            "reservations": params.get("reservations", "[]"),
+            "max_time": params.get("max_time", "1:00:00"),
+            "submission_ssh_key": params.get("submission_ssh_key", ""),
+            "forward_ports": params.get("forward_ports", "[]"),
+            "python_file": params.get("python_file", ""),
+            "python_file_train": params.get("python_file_train", ""),
+            "python_file_inference": params.get("python_file_inference", ""),
+            "python_file_tune": params.get("python_file_tune", "")
+        }
+        
+        logger.info(f"Successfully retrieved details for model {model_name}")
+        return algorithm_details
+        
+    except Exception as e:
+        logger.error(f"Error retrieving algorithm details from MLflow: {str(e)}")
+        
+        # Print the full exception traceback for better debugging
+        import traceback
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise
+
+@flow(name="Parent flow")
+async def launch_parent_flow(params_list: list[dict]):
+    """
+    Smart job router that automatically selects the best execution environment
+    based on the HPC type and loads algorithm details from MLflow.
+    
+    Args:
+        params_list: List of parameters for the job, each containing model_name and task_name
     """
     prefect_logger = get_run_logger()
     client = get_client()
@@ -81,21 +171,44 @@ async def launch_parent_flow(
     # Execute each step in sequence based on the selected environment
     flow_run_id = ""
     
-    for i, params in enumerate(params_list):
+    for i, child_job_params in enumerate(params_list):
         prefect_logger.info(f"Running step {i+1} of {len(params_list)}")
         
         try:
+            # Get model name and task
+            model_name = child_job_params.get("model_name", "")
+            task_name = child_job_params.get("task_name", "")
+            params = child_job_params.get("params", {})
+            
+            # Get algorithm details from MLflow
+            algorithm_details = get_algorithm_details_from_mlflow(model_name)
+            
+            # Get the appropriate python file name based on the task name
+            if task_name == "run":
+                python_file = algorithm_details.get("python_file", "")
+            elif task_name == "train":
+                python_file = algorithm_details.get("python_file_train", "")
+            elif task_name == "inference":
+                python_file = algorithm_details.get("python_file_inference", "")
+            elif task_name == "tune":
+                python_file = algorithm_details.get("python_file_tune", "")
+            else:
+                # For any other task, default to python_file
+                python_file = algorithm_details.get("python_file", "")
+            
+            if not python_file:
+                prefect_logger.error(f"No Python file found for task {task_name}")
+                raise ValueError(f"No Python file found for task {task_name}")
+            
             if target_env == FlowType.conda:
-                # Extract only conda-relevant parameters
+                # Prepare conda parameters
                 conda_relevant_params = {
-                    "conda_env_name": params["conda_env_name"],
-                    "python_file_name": params["python_file_name"],
-                    "params": params.get("params", {})
+                    "conda_env_name": algorithm_details["conda_env"],
+                    "python_file_name": python_file,
+                    "params": params
                 }
-                
                 # Validate parameters with the schema
                 conda_params = CondaParams(**conda_relevant_params)
-                
                 # If there's a previous flow run ID, set it in the parameters
                 if flow_run_id:
                     if "io_parameters" not in conda_params.params:
@@ -122,20 +235,18 @@ async def launch_parent_flow(
                 flow_run_id = str(flow_run.id)
                 
             elif target_env == FlowType.docker:
-                # Extract only docker-relevant parameters
+                # Prepare docker parameters
                 docker_relevant_params = {
-                    "image_name": params["image_name"],
-                    "image_tag": params["image_tag"],
-                    "command": params.get("command", "python src/train.py"),
-                    "volumes": params.get("volumes", []),
-                    "network": params.get("network", ""),
-                    "env_vars": params.get("env_vars", {}),
-                    "params": params.get("params", {})
+                    "image_name": algorithm_details["image_name"],
+                    "image_tag": algorithm_details["image_tag"],
+                    "command": f"python {python_file}",
+                    "volumes": json.loads(algorithm_details["volumes"]),
+                    "network": algorithm_details["network"],
+                    "env_vars": {},
+                    "params": params
                 }
-                
                 # Validate parameters with the schema
                 docker_params = DockerParams(**docker_relevant_params)
-                
                 # If there's a previous flow run ID, set it in the parameters
                 if flow_run_id:
                     if "io_parameters" not in docker_params.params:
@@ -162,20 +273,18 @@ async def launch_parent_flow(
                 flow_run_id = str(flow_run.id)
                 
             elif target_env == FlowType.podman:
-                # Extract only podman-relevant parameters
+                # Prepare podman parameters
                 podman_relevant_params = {
-                    "image_name": params["image_name"],
-                    "image_tag": params["image_tag"],
-                    "command": params.get("command", "python src/train.py"),
-                    "volumes": params.get("volumes", []),
-                    "network": params.get("network", ""),
-                    "env_vars": params.get("env_vars", {}),
-                    "params": params.get("params", {})
+                    "image_name": algorithm_details["image_name"],
+                    "image_tag": algorithm_details["image_tag"],
+                    "command": f"python {python_file}",
+                    "volumes": json.loads(algorithm_details["volumes"]),
+                    "network": algorithm_details["network"],
+                    "env_vars": {},
+                    "params": params
                 }
-                
                 # Validate parameters with the schema
                 podman_params = PodmanParams(**podman_relevant_params)
-                
                 # If there's a previous flow run ID, set it in the parameters
                 if flow_run_id:
                     if "io_parameters" not in podman_params.params:
@@ -202,20 +311,20 @@ async def launch_parent_flow(
                 flow_run_id = str(flow_run.id)
                 
             elif target_env == FlowType.slurm:
-                # Extract only slurm-relevant parameters
+                # Prepare slurm parameters
                 slurm_relevant_params = {
-                    "job_name": params["job_name"],
-                    "num_nodes": params["num_nodes"],
-                    "partitions": params.get("partitions", []),
-                    "reservations": params.get("reservations", []),
-                    "max_time": params["max_time"],
-                    "conda_env_name": params["conda_env_name"],
-                    "forward_ports": params.get("forward_ports", []),
-                    "submission_ssh_key": params.get("submission_ssh_key", None),
-                    "python_file_name": params.get("python_file_name", "src/train.py"),
-                    "params": params.get("params", {})
+                    "job_name": f"{model_name}_{task_name}",
+                    "num_nodes": algorithm_details["num_nodes"],
+                    "partitions": json.loads(algorithm_details["partitions"]),
+                    "reservations": json.loads(algorithm_details["reservations"]),
+                    "max_time": algorithm_details["max_time"],
+                    "conda_env_name": algorithm_details["conda_env"],
+                    "forward_ports": json.loads(algorithm_details["forward_ports"]),
+                    "submission_ssh_key": algorithm_details["submission_ssh_key"],
+                    "python_file_name": python_file,
+                    "params": params
                 }
-                
+
                 # Validate parameters with the schema
                 slurm_params = SlurmParams(**slurm_relevant_params)
                 
@@ -247,7 +356,7 @@ async def launch_parent_flow(
             else:
                 prefect_logger.error("Flow type not supported")
                 raise ValueError("Flow type not supported")
-                
+
             prefect_logger.info(f"Step {i+1} completed with flow run ID: {flow_run_id}")
             
         except Exception as e:
