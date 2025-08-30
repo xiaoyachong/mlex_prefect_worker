@@ -65,7 +65,7 @@ deployments:
   entrypoint: flows/parent_flow.py:launch_parent_flow
   parameters: {}
   work_pool:
-    name: mlex_pool
+    name: parent_pool
     work_queue_name: default-queue
     job_variables: {}
   schedule:

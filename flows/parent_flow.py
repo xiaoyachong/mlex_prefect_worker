@@ -3,6 +3,7 @@ import os
 import json
 from enum import Enum
 
+import yaml
 import mlflow
 from mlflow.tracking import MlflowClient
 from prefect import flow, task, get_run_logger
@@ -25,11 +26,29 @@ MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "")
 MLFLOW_TRACKING_USERNAME = os.getenv("MLFLOW_TRACKING_USERNAME", "")
 MLFLOW_TRACKING_PASSWORD = os.getenv("MLFLOW_TRACKING_PASSWORD", "")
 
+# Path to configuration file
+CONFIG_PATH = "config.yml"
+
 class FlowType(str, Enum):
     podman = "podman"
     conda = "conda"
     slurm = "slurm"
     docker = "docker"
+
+def load_config():
+    """
+    Load the configuration from config.yml file.
+    
+    Returns:
+        Dictionary containing configuration
+    """
+    try:
+        with open(CONFIG_PATH, 'r') as f:
+            config = yaml.safe_load(f)
+        return config
+    except Exception as e:
+        logger.error(f"Error loading configuration from {CONFIG_PATH}: {str(e)}")
+        return {}
 
 @task
 def determine_best_environment(hpc_type: str) -> FlowType:
@@ -63,16 +82,45 @@ def determine_best_environment(hpc_type: str) -> FlowType:
         logger.info(f"Unknown HPC type: {hpc_type}, defaulting to CONDA environment")
         return FlowType.conda
 
+def _get_conda_env_for_model(model_name: str, config: dict) -> str:
+    """
+    Simple helper function to determine the appropriate conda environment for a model.
+    
+    Args:
+        model_name: The name of the model
+        config: The configuration dictionary from config.yml
+        
+    Returns:
+        The appropriate conda environment name
+    """
+    conda_envs = config.get("conda", {}).get("conda_env_name", {})
+    
+    # Determine model type from the model name
+    if "autoencoder" in model_name.lower():
+        return conda_envs.get("pytorch_autoencoder", "")
+    elif "pca" in model_name.lower():
+        return conda_envs.get("pca", "")
+    elif "umap" in model_name.lower():
+        return conda_envs.get("umap", "")
+    elif any(cluster_type in model_name.lower() for cluster_type in ["cluster", "dbscan", "hdbscan", "kmeans"]):
+        return conda_envs.get("clustering", "")
+    
+    # Default to first conda environment if available
+    if conda_envs:
+        return next(iter(conda_envs.values()))
+    return ""
+
 @task
-def get_algorithm_details_from_mlflow(model_name: str):
+def get_algorithm_details_from_mlflow(model_name: str, config: dict):
     """
     Retrieve algorithm details from MLflow using the model name.
     
     Args:
         model_name: The name of the model in MLflow
+        config: Configuration dictionary from config.yml
     
     Returns:
-        Dictionary containing algorithm details
+        Tuple containing (algorithm_details, job_details)
     """
     logger = get_run_logger()
     logger.info(f"Retrieving details for model {model_name} from MLflow")
@@ -90,15 +138,6 @@ def get_algorithm_details_from_mlflow(model_name: str):
     try:
         client = MlflowClient()
         
-        # Add additional logging to list all registered models
-        try:
-            all_models = client.search_registered_models()
-            logger.info(f"Found {len(all_models)} registered models in MLflow:")
-            for rm in all_models:
-                logger.info(f"  - {rm.name}")
-        except Exception as e:
-            logger.warning(f"Could not list registered models: {str(e)}")
-        
         # Get the latest version of the model
         logger.info(f"Attempting to get latest versions for model: {model_name}")
         versions = client.get_latest_versions(model_name)
@@ -115,30 +154,45 @@ def get_algorithm_details_from_mlflow(model_name: str):
         
         # Extract the relevant parameters
         params = run.data.params
-        tags = run.data.tags
         
-        # Get relevant fields from MLflow params
+        # Get algorithm details from MLflow - only the core information
         algorithm_details = {
             "model_name": model_name,
+            # Core Algorithm Information
             "image_name": params.get("image_name", ""),
             "image_tag": params.get("image_tag", ""),
-            "conda_env": params.get("conda_env", ""),
-            "network": params.get("network", ""),
-            "volumes": params.get("volumes", "[]"),
-            "num_nodes": int(params.get("num_nodes", 1)),
-            "partitions": params.get("partitions", "[]"),
-            "reservations": params.get("reservations", "[]"),
-            "max_time": params.get("max_time", "1:00:00"),
-            "submission_ssh_key": params.get("submission_ssh_key", ""),
-            "forward_ports": params.get("forward_ports", "[]"),
-            "python_file": params.get("python_file", ""),
-            "python_file_train": params.get("python_file_train", ""),
-            "python_file_inference": params.get("python_file_inference", ""),
-            "python_file_tune": params.get("python_file_tune", "")
+            "source": params.get("source", ""),
+            "is_gpu_enabled": params.get("is_gpu_enabled", "False").lower() == "true"
+        }
+        
+        # Handle Python file paths
+        if "python_file_train" in params:
+            algorithm_details["python_file_train"] = params.get("python_file_train", "")
+        if "python_file_inference" in params:
+            algorithm_details["python_file_inference"] = params.get("python_file_inference", "")
+        if "python_file_tune" in params:
+            algorithm_details["python_file_tune"] = params.get("python_file_tune", "")
+        if "python_file" in params:
+            algorithm_details["python_file"] = params.get("python_file", "")
+        
+        # Create job details from config.yml
+        job_details = {
+            # Container settings
+            "volumes": config.get("container", {}).get("volumes", []),
+            "network": config.get("container", {}).get("network", ""),
+            # Slurm settings
+            "num_nodes": config.get("slurm", {}).get("num_nodes", 1),
+            "partitions": config.get("slurm", {}).get("partitions", "[]"),
+            "reservations": config.get("slurm", {}).get("reservations", "[]"),
+            "max_time": config.get("slurm", {}).get("max_time", "1:00:00"),
+            "submission_ssh_key": config.get("slurm", {}).get("submission_ssh_key", ""),
+            "forward_ports": config.get("slurm", {}).get("forward_ports", "[]"),
+            # Get conda environment based on the model type
+            "conda_env": _get_conda_env_for_model(model_name, config)
         }
         
         logger.info(f"Successfully retrieved details for model {model_name}")
-        return algorithm_details
+        return algorithm_details, job_details
         
     except Exception as e:
         logger.error(f"Error retrieving algorithm details from MLflow: {str(e)}")
@@ -160,8 +214,11 @@ async def launch_parent_flow(params_list: list[dict]):
     prefect_logger = get_run_logger()
     client = get_client()
     
-    # Hardcoded HPC type for now
-    hpc_type = "als"
+    # Load configuration from file
+    config = load_config()
+    
+    # Get HPC type from config, default to "conda" if not specified
+    hpc_type = config.get("hpc_type", "als")
     prefect_logger.info(f"Starting job router (parent flow) for HPC: {hpc_type}")
     
     # Auto-select environment based on hpc_type
@@ -180,11 +237,11 @@ async def launch_parent_flow(params_list: list[dict]):
             task_name = child_job_params.get("task_name", "")
             params = child_job_params.get("params", {})
             
-            # Get algorithm details from MLflow
-            algorithm_details = get_algorithm_details_from_mlflow(model_name)
+            # Get algorithm details and job details from MLflow
+            algorithm_details, job_details = get_algorithm_details_from_mlflow(model_name, config)
             
             # Get the appropriate python file name based on the task name
-            if task_name == "run":
+            if task_name == "execute":
                 python_file = algorithm_details.get("python_file", "")
             elif task_name == "train":
                 python_file = algorithm_details.get("python_file_train", "")
@@ -201,9 +258,9 @@ async def launch_parent_flow(params_list: list[dict]):
                 raise ValueError(f"No Python file found for task {task_name}")
             
             if target_env == FlowType.conda:
-                # Prepare conda parameters
+                # Prepare conda parameters - use job_details for conda_env
                 conda_relevant_params = {
-                    "conda_env_name": algorithm_details["conda_env"],
+                    "conda_env_name": job_details["conda_env"],
                     "python_file_name": python_file,
                     "params": params
                 }
@@ -235,13 +292,13 @@ async def launch_parent_flow(params_list: list[dict]):
                 flow_run_id = str(flow_run.id)
                 
             elif target_env == FlowType.docker:
-                # Prepare docker parameters
+                # Prepare docker parameters - use algorithm_details for image info and job_details for environment
                 docker_relevant_params = {
                     "image_name": algorithm_details["image_name"],
                     "image_tag": algorithm_details["image_tag"],
                     "command": f"python {python_file}",
-                    "volumes": json.loads(algorithm_details["volumes"]),
-                    "network": algorithm_details["network"],
+                    "volumes": job_details["volumes"],
+                    "network": job_details["network"],
                     "env_vars": {},
                     "params": params
                 }
@@ -273,13 +330,13 @@ async def launch_parent_flow(params_list: list[dict]):
                 flow_run_id = str(flow_run.id)
                 
             elif target_env == FlowType.podman:
-                # Prepare podman parameters
+                # Prepare podman parameters - use algorithm_details for image info and job_details for environment
                 podman_relevant_params = {
                     "image_name": algorithm_details["image_name"],
                     "image_tag": algorithm_details["image_tag"],
                     "command": f"python {python_file}",
-                    "volumes": json.loads(algorithm_details["volumes"]),
-                    "network": algorithm_details["network"],
+                    "volumes": job_details["volumes"],
+                    "network": job_details["network"],
                     "env_vars": {},
                     "params": params
                 }
@@ -311,16 +368,29 @@ async def launch_parent_flow(params_list: list[dict]):
                 flow_run_id = str(flow_run.id)
                 
             elif target_env == FlowType.slurm:
-                # Prepare slurm parameters
+                # Parse string JSON values if needed
+                partitions = job_details["partitions"]
+                if isinstance(partitions, str):
+                    partitions = json.loads(partitions)
+                
+                reservations = job_details["reservations"]
+                if isinstance(reservations, str):
+                    reservations = json.loads(reservations)
+                
+                forward_ports = job_details["forward_ports"]
+                if isinstance(forward_ports, str):
+                    forward_ports = json.loads(forward_ports)
+                
+                # Prepare slurm parameters - use job_details for slurm configuration
                 slurm_relevant_params = {
                     "job_name": f"{model_name}_{task_name}",
-                    "num_nodes": algorithm_details["num_nodes"],
-                    "partitions": json.loads(algorithm_details["partitions"]),
-                    "reservations": json.loads(algorithm_details["reservations"]),
-                    "max_time": algorithm_details["max_time"],
-                    "conda_env_name": algorithm_details["conda_env"],
-                    "forward_ports": json.loads(algorithm_details["forward_ports"]),
-                    "submission_ssh_key": algorithm_details["submission_ssh_key"],
+                    "num_nodes": job_details["num_nodes"],
+                    "partitions": partitions,
+                    "reservations": reservations,
+                    "max_time": job_details["max_time"],
+                    "conda_env_name": job_details["conda_env"],
+                    "forward_ports": forward_ports,
+                    "submission_ssh_key": job_details["submission_ssh_key"],
                     "python_file_name": python_file,
                     "params": params
                 }
