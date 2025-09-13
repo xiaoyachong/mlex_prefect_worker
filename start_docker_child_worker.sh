@@ -6,7 +6,8 @@ prefect config set PREFECT_API_URL=$PREFECT_API_URL
 
 # Create work pool for job type docker
 prefect work-pool create docker_pool --type "process"
-prefect work-pool set-concurrency-limit docker_pool $PREFECT_WORK_POOL_CONCURRENCY
+prefect work-pool update docker_pool --concurrency-limit $PREFECT_WORK_POOL_CONCURRENCY
+prefect deploy -n launch_docker --pool docker_pool
 PREFECT_WORKER_WEBSERVER_PORT=8081 prefect worker start --pool docker_pool --limit $PREFECT_WORKER_LIMIT --with-healthcheck
 
 echo "Docker worker started"

@@ -13,7 +13,7 @@ readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.11"
 
 dependencies = [
-    "prefect==2.14.21",
+    "prefect==3.4.2",
     "typer<=0.9.4",
 ]
 

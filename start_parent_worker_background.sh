@@ -17,12 +17,12 @@ source "$CONDA_PATH/etc/profile.d/conda.sh"
     mkdir -p logs
 
     # Create parent pool for parent worker
-    prefect work-pool create parent_pool --type "process" || true
-    prefect work-pool set-concurrency-limit parent_pool $PREFECT_WORK_POOL_CONCURRENCY
+    prefect work-pool create parent_pool --type "process"
+    prefect work-pool update parent_pool --concurrency-limit $PREFECT_WORK_POOL_CONCURRENCY
     
-    # Deploy all flows
-    prefect deploy --all
-
+    # Deploy parent flow with updated syntax for Prefect 3.4.2
+    prefect deploy -n launch_parent_flow --pool parent_pool
+    
     # Start the parent worker process, redirecting stdout and stderr to a temporary log file
     PREFECT_WORKER_WEBSERVER_PORT=8080 prefect worker start --pool parent_pool --limit $PREFECT_WORKER_LIMIT --with-healthcheck &> "process_temp_parent.log" &
     pid_worker=$!

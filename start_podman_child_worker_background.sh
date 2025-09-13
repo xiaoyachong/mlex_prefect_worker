@@ -18,7 +18,8 @@ source "$CONDA_PATH/etc/profile.d/conda.sh"
 
     # Create podman worker pool
     prefect work-pool create podman_pool --type "process" || true
-    prefect work-pool set-concurrency-limit podman_pool $PREFECT_WORK_POOL_CONCURRENCY
+    prefect work-pool update podman_pool --concurrency-limit $PREFECT_WORK_POOL_CONCURRENCY
+    prefect deploy -n launch_podman --pool podman_pool
     
     # Start the podman worker with logs that include PID
     PREFECT_WORKER_WEBSERVER_PORT=8082 prefect worker start --pool podman_pool --limit $PREFECT_WORKER_LIMIT --with-healthcheck > "process_temp_podman.log" 2>&1 &
