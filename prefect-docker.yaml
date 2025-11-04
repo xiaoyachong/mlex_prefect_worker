@@ -1,0 +1,33 @@
+name: mlex_prefect_worker_docker
+prefect-version: 3.4.2
+
+build: null
+push: null
+
+# Pull steps for Docker worker - uses container path
+pull:
+- prefect.deployments.steps.set_working_directory:
+    directory: "/mlex_prefect_worker"
+
+deployments:
+- name: launch_docker
+  version: 0.1.0
+  tags: []
+  concurrency_limit: null
+  description: Launch docker job (native docker worker)
+  entrypoint: flows/docker/docker_flows.py:launch_docker
+  parameters: {}
+  work_pool:
+    name: docker_pool
+    work_queue_name: default-queue
+    job_variables:
+      image: "prefect-with-docker:latest"
+      image_pull_policy: "Never"  # ← ADD THIS LINE
+      volumes:
+        - "/var/run/docker.sock:/var/run/docker.sock"
+        - "/Users/xiaoyachong/Documents/3RSE/mlex_prefect_worker:/mlex_prefect_worker"
+      env:
+        PYTHONPATH: "/mlex_prefect_worker"
+      auto_remove: true
+      stream_output: true
+  schedules: []
