@@ -1,39 +1,92 @@
 # mlex_prefect_worker
 
-This repository contains the necessary scripts and configuration files to start a Prefect process worker with conda, Podman and Slurm flows.
+This repository contains the necessary scripts and configuration files to start a Prefect process worker with conda, Docker, Podman and Slurm flows.
 
 ## Getting Started
 
-1. Create a conda environment with the required packages:
+### 1. Create and activate conda environment
 
-    ```bash
-    conda create --name myenv python=3.11
-    ```
+Create a conda environment with the required packages:
+```bash
+conda create --name myenv python=3.11
+conda activate myenv
+```
 
-2. Activate the conda environment:
+### 2. Install the package
 
-    ```bash
-    conda activate myenv
-    ```
+This will install dependencies:
+```bash
+python -m pip install .
+```
 
-3. Install the package. This will install dependencies.
+### 3. Configure environment variables
 
-    ```bash
-    python -m pip install .
-    ```
+Copy the example environment file and update it with your settings:
+```bash
+cp .env.example .env
+# Edit .env with your configuration
+```
 
-4. Change permissions for the shell scripts to make them executable:
+### 4. Make shell scripts executable
 
-    ```bash
-    chmod +x start_worker.sh
-    chmod +x flows/podman/bash_run_podman.sh
-    ```
+Change permissions for the shell scripts:
+```bash
+chmod +x start_parent_worker.sh
+chmod +x start_docker_child_worker.sh
+```
 
-5. Run the `start_worker.sh` script to start the Prefect worker:
+### 5. Build Docker image (for Docker worker only)
 
-    ```bash
-    ./start_worker.sh
-    ```
+If you plan to use the Docker worker, build the required Docker image:
+```bash
+docker build -f Dockerfile.prefect-docker -t prefect-with-docker:latest .
+```
+
+This image contains the Prefect worker that can launch other Docker containers.
+
+### 6. Start workers
+
+#### Parent Worker (required)
+The parent worker orchestrates job routing and execution:
+```bash
+./start_parent_worker.sh
+```
+
+#### Docker Child Worker (optional)
+For Docker-based job execution:
+```bash
+./start_docker_child_worker.sh
+```
+
+## Worker Types
+
+This repository supports multiple execution environments:
+
+- **Conda**: Local execution in conda environments
+- **Docker**: Containerized execution using Docker
+- **Podman**: Containerized execution using Podman  
+- **Slurm**: HPC cluster execution via Slurm scheduler
+
+The parent worker automatically routes jobs to the appropriate execution environment based on the `hpc_type` setting in `config.yml`.
+
+## Configuration
+
+Edit `config.yml` to configure:
+- HPC type selection (als, nersc, nsls-ii)
+- Conda environment mappings
+- Container volume mounts and networks
+- Slurm job parameters
+
+## Monitoring
+
+Worker logs are stored in the `logs/` directory with the process ID in the filename:
+```bash
+# View Docker worker logs
+tail -f logs/docker_worker_<pid>.log
+
+# Stop Docker worker
+kill $(cat logs/docker_worker_pid.txt)
+```
 
 ## Copyright
 MLExchange Copyright (c) 2024, The Regents of the University of California,

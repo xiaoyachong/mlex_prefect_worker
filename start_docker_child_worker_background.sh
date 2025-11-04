@@ -10,6 +10,7 @@ source "$CONDA_PATH/etc/profile.d/conda.sh"
 # Start the worker command in the background, capture its PID, and assign the log file
 (
     export PREFECT_WORK_DIR=$PREFECT_WORK_DIR
+    export CONTAINER_WORK_DIR=$CONTAINER_WORK_DIR
     export PYTHONPATH=$PWD:$PYTHONPATH
     prefect config set PREFECT_API_URL=$PREFECT_API_URL
 

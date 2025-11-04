@@ -28,8 +28,12 @@ def launch_docker(
     # Append current flow run id
     docker_params.params["io_parameters"]["uid_save"] = current_flow_run_id
 
+    # Get paths from environment variables
+    container_work_dir = os.getenv("CONTAINER_WORK_DIR", "/mlex_prefect_worker")
+    host_work_dir = os.getenv("PREFECT_WORK_DIR", os.getcwd())
+    
     # Create temporary file in the mounted directory so it's accessible from host
-    temp_dir = "/mlex_prefect_worker/tmp"
+    temp_dir = os.path.join(container_work_dir, "tmp")
     os.makedirs(temp_dir, exist_ok=True)
     
     # Create temporary file for parameters
@@ -41,8 +45,7 @@ def launch_docker(
         logger.info(f"Parameters file: {temp_path}")
         
         # Convert container path to host path for Docker volume mounting
-        # /mlex_prefect_worker/tmp/xyz.yaml -> /Users/xiaoyachong/Documents/3RSE/mlex_prefect_worker/tmp/xyz.yaml
-        host_temp_path = temp_path.replace("/mlex_prefect_worker", "/Users/xiaoyachong/Documents/3RSE/mlex_prefect_worker")
+        host_temp_path = temp_path.replace(container_work_dir, host_work_dir)
 
         # Build docker command directly (no bash script needed)
         docker_cmd = ["docker", "run", "--rm"]

@@ -2,8 +2,8 @@
 source .env
 
 export PREFECT_WORK_DIR=$PREFECT_WORK_DIR
+export CONTAINER_WORK_DIR=$CONTAINER_WORK_DIR
 prefect config set PREFECT_API_URL=$PREFECT_API_URL
-
 
 # Create docker type work pool
 prefect work-pool create docker_pool --type "docker"

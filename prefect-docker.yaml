@@ -7,7 +7,7 @@ push: null
 # Pull steps for Docker worker - uses container path
 pull:
 - prefect.deployments.steps.set_working_directory:
-    directory: "/mlex_prefect_worker"
+    directory: "{{ $CONTAINER_WORK_DIR }}"
 
 deployments:
 - name: launch_docker
@@ -22,12 +22,14 @@ deployments:
     work_queue_name: default-queue
     job_variables:
       image: "prefect-with-docker:latest"
-      image_pull_policy: "Never"  # ← ADD THIS LINE
+      image_pull_policy: "Never"
       volumes:
         - "/var/run/docker.sock:/var/run/docker.sock"
-        - "/Users/xiaoyachong/Documents/3RSE/mlex_prefect_worker:/mlex_prefect_worker"
+        - "{{ $PREFECT_WORK_DIR }}:{{ $CONTAINER_WORK_DIR }}"
       env:
-        PYTHONPATH: "/mlex_prefect_worker"
+        PYTHONPATH: "{{ $CONTAINER_WORK_DIR }}"
+        CONTAINER_WORK_DIR: "{{ $CONTAINER_WORK_DIR }}"
+        PREFECT_WORK_DIR: "{{ $PREFECT_WORK_DIR }}"
       auto_remove: true
       stream_output: true
   schedules: []
