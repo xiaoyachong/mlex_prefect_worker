@@ -96,7 +96,9 @@ def _get_conda_env_for_model(model_name: str, config: dict) -> str:
     conda_envs = config.get("conda", {}).get("conda_env_name", {})
     
     # Determine model type from the model name
-    if "autoencoder" in model_name.lower():
+    if "dlsia" in model_name.lower():  # ← ADD THIS LINE
+        return conda_envs.get("dlsia", "")
+    elif "autoencoder" in model_name.lower():
         return conda_envs.get("pytorch_autoencoder", "")
     elif "pca" in model_name.lower():
         return conda_envs.get("pca", "")
