@@ -11,18 +11,16 @@ conda:
     pca: "mlex_dimension_reduction_pca"
     umap: "mlex_dimension_reduction_umap"
     clustering: "mlex_clustering"
-    dlsia: "dlsia"  # ← For all "DLSIA xx" models
+    dlsia: "dlsia"
 
 # Docker/Podman container settings
 container:
-  ##for data clinic:
-  # volumes:
-  #   - "/Users/xiaoyachong/Documents/3RSE/mlex_data_clinic/data/tiled_storage:/tiled_storage"
-  # network: "mle_net"
-  #for segmentation
+  # Use environment variables for dynamic paths
+  # These will be expanded at runtime from .env file
   volumes:
-    - "/Users/xiaoyachong/Documents/3RSE/mlex_tomo_framework/data/results:/app/work/results"
-  network: "mlex_tomo_framework_mle_net"
+    - "${RESULTS_DIR}:/app/work/results"
+    - "${TILED_STORAGE_DIR}:/tiled_storage"
+  network: "${CONTAINER_NETWORK}"
 
 # Slurm job scheduler settings
 slurm:

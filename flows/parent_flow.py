@@ -9,6 +9,7 @@ from mlflow.tracking import MlflowClient
 from prefect import flow, task, get_run_logger
 from prefect.deployments import run_deployment
 from prefect.states import Failed
+from dotenv import load_dotenv  # Add this import
 
 # Import the Prefect client to check flow run states
 from prefect.client import get_client
@@ -18,6 +19,9 @@ from flows.conda.schema import CondaParams
 from flows.docker.schema import DockerParams
 from flows.podman.schema import PodmanParams
 from flows.slurm.schema import SlurmParams
+
+# Load .env file at module import
+load_dotenv()  # Add this line
 
 logger = logging.getLogger(__name__)
 
@@ -35,16 +39,32 @@ class FlowType(str, Enum):
     slurm = "slurm"
     docker = "docker"
 
+def expand_env_vars(obj):
+    """Recursively expand environment variables in nested structures"""
+    if isinstance(obj, dict):
+        return {k: expand_env_vars(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [expand_env_vars(item) for item in obj]
+    elif isinstance(obj, str):
+        # Expand ${VAR} and $VAR patterns
+        return os.path.expandvars(obj)
+    else:
+        return obj
+
 def load_config():
     """
-    Load the configuration from config.yml file.
+    Load the configuration from config.yml file and expand environment variables.
     
     Returns:
-        Dictionary containing configuration
+        Dictionary containing configuration with expanded env vars
     """
     try:
         with open(CONFIG_PATH, 'r') as f:
             config = yaml.safe_load(f)
+        
+        # Expand all environment variables
+        config = expand_env_vars(config)
+        
         return config
     except Exception as e:
         logger.error(f"Error loading configuration from {CONFIG_PATH}: {str(e)}")
@@ -96,7 +116,7 @@ def _get_conda_env_for_model(model_name: str, config: dict) -> str:
     conda_envs = config.get("conda", {}).get("conda_env_name", {})
     
     # Determine model type from the model name
-    if "dlsia" in model_name.lower():  # ← ADD THIS LINE
+    if "dlsia" in model_name.lower():
         return conda_envs.get("dlsia", "")
     elif "autoencoder" in model_name.lower():
         return conda_envs.get("pytorch_autoencoder", "")
@@ -177,7 +197,7 @@ def get_algorithm_details_from_mlflow(model_name: str, config: dict):
         if "python_file" in params:
             algorithm_details["python_file"] = params.get("python_file", "")
         
-        # Create job details from config.yml
+        # Create job details from config.yml (already expanded by load_config)
         job_details = {
             # Container settings
             "volumes": config.get("container", {}).get("volumes", []),
@@ -216,10 +236,10 @@ async def launch_parent_flow(params_list: list[dict]):
     prefect_logger = get_run_logger()
     client = get_client()
     
-    # Load configuration from file
+    # Load configuration from file (with env vars expanded)
     config = load_config()
     
-    # Get HPC type from config, default to "conda" if not specified
+    # Get HPC type from config, default to "als" if not specified
     hpc_type = config.get("hpc_type", "als")
     prefect_logger.info(f"Starting job router (parent flow) for HPC: {hpc_type}")
     
