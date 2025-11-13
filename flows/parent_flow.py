@@ -9,7 +9,7 @@ from mlflow.tracking import MlflowClient
 from prefect import flow, task, get_run_logger
 from prefect.deployments import run_deployment
 from prefect.states import Failed
-from dotenv import load_dotenv  # Add this import
+from dotenv import load_dotenv
 
 # Import the Prefect client to check flow run states
 from prefect.client import get_client
@@ -21,7 +21,7 @@ from flows.podman.schema import PodmanParams
 from flows.slurm.schema import SlurmParams
 
 # Load .env file at module import
-load_dotenv()  # Add this line
+load_dotenv()
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,11 @@ logger = logging.getLogger(__name__)
 MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "")
 MLFLOW_TRACKING_USERNAME = os.getenv("MLFLOW_TRACKING_USERNAME", "")
 MLFLOW_TRACKING_PASSWORD = os.getenv("MLFLOW_TRACKING_PASSWORD", "")
+
+# Tiled API keys - load from environment variables
+DATA_TILED_API_KEY = os.getenv("DATA_TILED_API_KEY", "")
+MASK_TILED_API_KEY = os.getenv("MASK_TILED_API_KEY", "")
+SEG_TILED_API_KEY = os.getenv("SEG_TILED_API_KEY", "")
 
 # Path to configuration file
 CONFIG_PATH = "config.yml"
@@ -69,6 +74,44 @@ def load_config():
     except Exception as e:
         logger.error(f"Error loading configuration from {CONFIG_PATH}: {str(e)}")
         return {}
+
+def add_credentials_to_io_parameters(params: dict) -> dict:
+    """
+    Add credentials to io_parameters that were removed from the application.
+    This function intelligently adds only the credentials that are needed based on
+    which URIs are present in the io_parameters.
+    
+    Args:
+        params: Parameters dictionary containing io_parameters
+        
+    Returns:
+        Updated parameters dictionary with credentials added
+    """
+    if "io_parameters" not in params:
+        params["io_parameters"] = {}
+    
+    io_params = params["io_parameters"]
+    
+    # Mapping of URI keys to their corresponding API key environment variables
+    tiled_uri_to_key_mapping = {
+        "data_tiled_uri": ("data_tiled_api_key", DATA_TILED_API_KEY),
+        "mask_tiled_uri": ("mask_tiled_api_key", MASK_TILED_API_KEY),
+        "seg_tiled_uri": ("seg_tiled_api_key", SEG_TILED_API_KEY),
+        "results_tiled_uri": ("results_tiled_api_key", os.getenv("RESULTS_TILED_API_KEY", "")),
+    }
+    
+    # Add Tiled API keys only if corresponding URI exists and key is not already set
+    for uri_key, (api_key_name, api_key_value) in tiled_uri_to_key_mapping.items():
+        if uri_key in io_params and api_key_name not in io_params:
+            io_params[api_key_name] = api_key_value
+    
+    # Add MLflow credentials only if not already present
+    if "mlflow_tracking_username" not in io_params:
+        io_params["mlflow_tracking_username"] = MLFLOW_TRACKING_USERNAME
+    if "mlflow_tracking_password" not in io_params:
+        io_params["mlflow_tracking_password"] = MLFLOW_TRACKING_PASSWORD
+    
+    return params
 
 @task
 def determine_best_environment(hpc_type: str) -> FlowType:
@@ -258,6 +301,9 @@ async def launch_parent_flow(params_list: list[dict]):
             model_name = child_job_params.get("model_name", "")
             task_name = child_job_params.get("task_name", "")
             params = child_job_params.get("params", {})
+            
+            # Add credentials to io_parameters
+            params = add_credentials_to_io_parameters(params)
             
             # Get algorithm details and job details from MLflow
             algorithm_details, job_details = get_algorithm_details_from_mlflow(model_name, config)
