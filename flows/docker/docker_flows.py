@@ -7,6 +7,7 @@ from prefect.utilities.processutils import run_process
 
 from flows.docker.schema import DockerParams
 from flows.logger import setup_logger
+from flows.credentials import add_credentials_to_io_parameters
 
 
 @flow(name="Docker flow")
@@ -27,6 +28,9 @@ async def launch_docker(
 
     # Append current flow run id
     docker_params.params["io_parameters"]["uid_save"] = current_flow_run_id
+
+    # Add credentials to io_parameters at the child flow level
+    docker_params.params = add_credentials_to_io_parameters(docker_params.params)
 
     # Get paths from environment variables
     container_work_dir = os.getenv("CONTAINER_WORK_DIR", "/mlex_prefect_worker")

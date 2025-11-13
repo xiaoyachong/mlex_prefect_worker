@@ -7,6 +7,7 @@ from prefect.utilities.processutils import run_process
 
 from flows.conda.schema import CondaParams
 from flows.logger import setup_logger
+from flows.credentials import add_credentials_to_io_parameters
 
 
 @flow(name="launch_conda")
@@ -27,6 +28,9 @@ async def launch_conda(
 
     # Append current flow run id
     conda_params.params["io_parameters"]["uid_save"] = current_flow_run_id
+
+    # Add credentials to io_parameters at the child flow level
+    conda_params.params = add_credentials_to_io_parameters(conda_params.params)
 
     # Create temporary file for parameters
     with tempfile.NamedTemporaryFile(mode="w+t") as temp_file:

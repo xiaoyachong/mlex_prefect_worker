@@ -19,7 +19,6 @@ from flows.slurm.schema import SlurmParams
 from flows.utils import (
     FlowType,
     load_config,
-    add_credentials_to_io_parameters,
     determine_best_environment,
     get_algorithm_details_from_mlflow,
 )
@@ -91,8 +90,7 @@ async def launch_parent_flow(params_list: list[dict]):
             task_name = child_job_params.get("task_name", "")
             params = child_job_params.get("params", {})
             
-            # Add credentials to io_parameters
-            params = add_credentials_to_io_parameters(params)
+            # NOTE: Credentials are NO LONGER added here - they will be added in child flows
             
             # Get algorithm details and job details from MLflow
             algorithm_details, job_details = get_algorithm_details_from_mlflow_task(model_name, config)
@@ -139,12 +137,6 @@ async def launch_parent_flow(params_list: list[dict]):
                     parameters=deployment_data
                 )
                 
-                # Check the status of the flow run
-                flow_run = await client.read_flow_run(flow_run.id)
-                
-                if flow_run.state.is_failed():
-                    prefect_logger.error(f"Step {i+1} failed with state: {flow_run.state.type}")
-                    return Failed(message=f"Child flow failed with state: {flow_run.state.type}")
                     
                 flow_run_id = str(flow_run.id)
                 
@@ -177,12 +169,6 @@ async def launch_parent_flow(params_list: list[dict]):
                     parameters=deployment_data
                 )
                 
-                # Check the status of the flow run
-                flow_run = await client.read_flow_run(flow_run.id)
-                
-                if flow_run.state.is_failed():
-                    prefect_logger.error(f"Step {i+1} failed with state: {flow_run.state.type}")
-                    return Failed(message=f"Child flow failed with state: {flow_run.state.type}")
                     
                 flow_run_id = str(flow_run.id)
                 
@@ -215,12 +201,6 @@ async def launch_parent_flow(params_list: list[dict]):
                     parameters=deployment_data
                 )
                 
-                # Check the status of the flow run
-                flow_run = await client.read_flow_run(flow_run.id)
-                
-                if flow_run.state.is_failed():
-                    prefect_logger.error(f"Step {i+1} failed with state: {flow_run.state.type}")
-                    return Failed(message=f"Child flow failed with state: {flow_run.state.type}")
                     
                 flow_run_id = str(flow_run.id)
                 
@@ -271,12 +251,6 @@ async def launch_parent_flow(params_list: list[dict]):
                     parameters=deployment_data
                 )
                 
-                # Check the status of the flow run
-                flow_run = await client.read_flow_run(flow_run.id)
-                
-                if flow_run.state.is_failed():
-                    prefect_logger.error(f"Step {i+1} failed with state: {flow_run.state.type}")
-                    return Failed(message=f"Child flow failed with state: {flow_run.state.type}")
                     
                 flow_run_id = str(flow_run.id)
                 
