@@ -4,8 +4,6 @@
 source .env
 
 echo "Executing Folder: ${PWD}"
-# Initialize conda
-source "$CONDA_PATH/etc/profile.d/conda.sh"
 
 # Start the worker command in the background, capture its PID, and assign the log file
 (
@@ -35,5 +33,5 @@ source "$CONDA_PATH/etc/profile.d/conda.sh"
     echo "$pid_worker" > logs/parent_worker_pid.txt
 
     echo "Started parent Prefect worker with PID: $pid_worker and logging to $log_file"
-    echo "To stop this worker, run: kill \$(cat logs/parent_worker_pid.txt)"
+    echo "To stop this worker, run: kill -9 \$(cat logs/parent_worker_pid.txt)"
 )

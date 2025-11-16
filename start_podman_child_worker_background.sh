@@ -34,5 +34,5 @@ source "$CONDA_PATH/etc/profile.d/conda.sh"
     
     echo "Started Podman worker with PID: $podman_pid and logging to $podman_log"
     echo "To view logs, use: tail -f $podman_log"
-    echo "To stop worker, run: kill \$(cat logs/podman_worker_pid.txt)"
+    echo "To stop worker, run: kill -9 \$(cat logs/podman_worker_pid.txt)"
 )

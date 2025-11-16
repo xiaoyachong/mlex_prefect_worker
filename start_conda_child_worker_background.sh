@@ -34,5 +34,5 @@ source "$CONDA_PATH/etc/profile.d/conda.sh"
     
     echo "Started Conda worker with PID: $conda_pid and logging to $conda_log"
     echo "To view logs, use: tail -f $conda_log"
-    echo "To stop worker, run: kill \$(cat logs/conda_worker_pid.txt)"
+    echo "To stop worker, run: kill -9 \$(cat logs/conda_worker_pid.txt)"
 )

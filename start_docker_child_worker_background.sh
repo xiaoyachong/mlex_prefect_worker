@@ -4,8 +4,6 @@
 source .env
 
 echo "Executing Folder: ${PWD}"
-# Initialize conda
-source "$CONDA_PATH/etc/profile.d/conda.sh"
 
 # Start the worker command in the background, capture its PID, and assign the log file
 (
@@ -20,7 +18,7 @@ source "$CONDA_PATH/etc/profile.d/conda.sh"
     # Create docker worker pool
     prefect work-pool create docker_pool --type "docker" || true
     prefect work-pool update docker_pool --concurrency-limit $PREFECT_WORK_POOL_CONCURRENCY
-    prefect deploy -n launch_docker --pool docker_pool --prefect-file prefect-docker.yaml
+    yes n |prefect deploy -n launch_docker --pool docker_pool --prefect-file prefect-docker.yaml
     
     # Start the docker worker with logs that include PID
     PREFECT_WORKER_WEBSERVER_PORT=8081 prefect worker start --pool docker_pool --limit $PREFECT_WORKER_LIMIT --with-healthcheck > "process_temp_docker.log" 2>&1 &
@@ -35,5 +33,5 @@ source "$CONDA_PATH/etc/profile.d/conda.sh"
     
     echo "Started Docker worker with PID: $docker_pid and logging to $docker_log"
     echo "To view logs, use: tail -f $docker_log"
-    echo "To stop worker, run: kill \$(cat logs/docker_worker_pid.txt)"
+    echo "To stop worker, run: kill -9 \$(cat logs/docker_worker_pid.txt)"
 )

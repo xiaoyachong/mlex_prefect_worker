@@ -34,5 +34,5 @@ source "$CONDA_PATH/etc/profile.d/conda.sh"
     
     echo "Started Slurm worker with PID: $slurm_pid and logging to $slurm_log"
     echo "To view logs, use: tail -f $slurm_log"
-    echo "To stop worker, run: kill \$(cat logs/slurm_worker_pid.txt)"
+    echo "To stop worker, run: kill -9 \$(cat logs/slurm_worker_pid.txt)"
 )
