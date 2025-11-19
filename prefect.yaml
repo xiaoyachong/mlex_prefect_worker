@@ -52,6 +52,19 @@ deployments:
     job_variables: {}
   schedules: []
 
+- name: launch_docker
+  version: 0.1.0
+  tags: []
+  concurrency_limit: null
+  description: Launch docker job
+  entrypoint: flows/docker/docker_flows.py:launch_docker
+  parameters: {}
+  work_pool:
+    name: docker_pool
+    work_queue_name: default-queue
+    job_variables: {}
+  schedules: []
+
 
 - name: launch_parent_flow
   version: 0.1.0

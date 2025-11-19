@@ -31,28 +31,14 @@ async def launch_docker(
 
     # Add credentials to io_parameters at the child flow level
     docker_params.params = add_credentials_to_io_parameters(docker_params.params)
-
-    # Get paths from environment variables
-    container_work_dir = os.getenv("CONTAINER_WORK_DIR", "/mlex_prefect_worker")
-    host_work_dir = os.getenv("PREFECT_WORK_DIR", os.getcwd())
-    
-    # Create temp directory if it doesn't exist
-    temp_dir = os.path.join(container_work_dir, "tmp")
-    os.makedirs(temp_dir, exist_ok=True)
-
-    # Create temporary file for parameters in the mounted directory
-    with tempfile.NamedTemporaryFile(mode="w+t", dir=temp_dir) as temp_file:
+    # Create temporary file for parameters
+    with tempfile.NamedTemporaryFile(mode="w+t") as temp_file:
         yaml.dump(docker_params.params, temp_file)
-        temp_file.flush()  # Ensure data is written
-        
         logger.info(f"Parameters file: {temp_file.name}")
-        
-        # Convert container path to host path for Docker volume mounting
-        host_temp_path = temp_file.name.replace(container_work_dir, host_work_dir)
 
         # Mount extra volume with parameters yaml file
         volumes = docker_params.volumes + [
-            f"{host_temp_path}:/app/work/config/params.yaml"
+            f"{temp_file.name}:/app/work/config/params.yaml"
         ]
         command = f"{docker_params.command} /app/work/config/params.yaml"
 
