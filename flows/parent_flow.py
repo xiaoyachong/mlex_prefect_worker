@@ -59,7 +59,7 @@ def get_algorithm_details_from_mlflow_task(model_name: str, config: dict):
 async def launch_parent_flow(params_list: list[dict]):
     """
     Smart job router that automatically selects the best execution environment
-    based on the HPC type and loads algorithm details from MLflow.
+    based on the worker configuration and loads algorithm details from MLflow.
     
     Args:
         params_list: List of parameters for the job, each containing model_name and task_name
@@ -70,12 +70,13 @@ async def launch_parent_flow(params_list: list[dict]):
     # Load configuration from file (with env vars expanded)
     config = load_config()
     
-    # Get HPC type from config, default to "als" if not specified
-    hpc_type = config.get("hpc_type", "als")
-    prefect_logger.info(f"Starting job router (parent flow) for HPC: {hpc_type}")
+    # Get worker configuration from config, default to "als" if not specified
+    worker_config = config.get("worker", {})
+    worker_name = worker_config.get("name", "als")
+    prefect_logger.info(f"Starting job router (parent flow) for worker: {worker_name}")
     
-    # Auto-select environment based on hpc_type
-    target_env = determine_best_environment_task(hpc_type)
+    # Auto-select environment based on worker_type if specified, otherwise use worker_name
+    target_env = determine_best_environment_task(worker_name)
     prefect_logger.info(f"Selected target environment: {target_env}")
     
     # Execute each step in sequence based on the selected environment

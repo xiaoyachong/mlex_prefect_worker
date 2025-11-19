@@ -1,6 +1,8 @@
 # MLExchange Job Configuration
-# Default HPC type to use
-hpc_type: "als"
+# Default worker configuration
+worker:
+  name: "als"    # Can be "als", "nersc", "nsls-ii", "conda"
+  type: "docker" # Can be "docker", "slrum", "podman", "conda"
 
 # Configuration for different job types
 

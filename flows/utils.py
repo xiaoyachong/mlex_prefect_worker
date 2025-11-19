@@ -68,7 +68,7 @@ def determine_best_environment(hpc_type: str):
     Determine the best execution environment based on hpc_type.
     
     Args:
-        hpc_type: Type of HPC to execute on
+        hpc_type: Type of HPC to execute on (can be worker name or flow type)
     
     Returns:
         Best flow type to use
@@ -78,20 +78,20 @@ def determine_best_environment(hpc_type: str):
     # Map HPC type to flow type
     hpc_type = hpc_type.lower()
     if hpc_type == "nersc":
-        logger.info(f"HPC type is NERSC, selecting SLURM")
+        logger.info(f"Worker type is NERSC, selecting SLURM")
         return FlowType.slurm
     elif hpc_type == "nsls-ii":
-        logger.info(f"HPC type is NSLS-II, selecting PODMAN")
+        logger.info(f"Worker type is NSLS-II, selecting PODMAN")
         return FlowType.podman
     elif hpc_type == "als":
-        logger.info(f"HPC type is ALS cluster-ball, selecting DOCKER")
+        logger.info(f"Worker type is ALS cluster-ball, selecting DOCKER")
         return FlowType.docker
     elif hpc_type in [ft.value for ft in FlowType]:
         # If the hpc_type is actually a flow type, use it directly
         return FlowType(hpc_type)
     else:
-        # Default to conda for unknown HPC types
-        logger.info(f"Unknown HPC type: {hpc_type}, defaulting to CONDA environment")
+        # Default to conda for unknown types
+        logger.info(f"Unknown worker type: {hpc_type}, defaulting to CONDA environment")
         return FlowType.conda
 
 
