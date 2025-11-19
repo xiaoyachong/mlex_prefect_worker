@@ -1,9 +1,8 @@
 # MLExchange Job Configuration
 # Default worker configuration
 worker:
-  name: "als"    # Can be "als", "nersc", "nsls-ii", "conda"
-  type: "docker" # Can be "docker", "slrum", "podman", "conda"
-
+  name: "als"    # Environment name ("als"->docker, "nersc"->slurm, "nsls-ii"->podman, "conda"->conda)
+  type: "docker" # Execution type (should match the name)
 # Configuration for different job types
 
 # Conda environment settings
@@ -19,9 +18,7 @@ conda:
 container:
   # Use environment variables for dynamic paths
   # These will be expanded at runtime from .env file
-  volumes:
-    - "${RESULTS_DIR}:/app/work/results"
-    - "${TILED_STORAGE_DIR}:/tiled_storage"
+  volumes: []
   network: "${CONTAINER_NETWORK}"
 
 # Slurm job scheduler settings
