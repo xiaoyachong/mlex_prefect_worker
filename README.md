@@ -35,16 +35,7 @@ chmod +x start_parent_worker.sh
 chmod +x start_docker_child_worker.sh
 ```
 
-### 5. Build Docker image (for Docker worker only)
-
-If you plan to use the Docker worker, build the required Docker image:
-```bash
-docker build -f Dockerfile.prefect-docker -t prefect-with-docker:latest .
-```
-
-This image contains the Prefect worker that can launch other Docker containers.
-
-### 6. Start workers
+### 5. Start workers
 
 #### Parent Worker (required)
 The parent worker orchestrates job routing and execution:
@@ -67,12 +58,12 @@ This repository supports multiple execution environments:
 - **Podman**: Containerized execution using Podman  
 - **Slurm**: HPC cluster execution via Slurm scheduler
 
-The parent worker automatically routes jobs to the appropriate execution environment based on the `hpc_type` setting in `config.yml`.
+The parent worker automatically routes jobs to the appropriate execution environment based on the `worker.name` setting in `config.yml`.
 
 ## Configuration
 
 Edit `config.yml` to configure:
-- HPC type selection (als, nersc, nsls-ii)
+- Worker type selection: facility names map to execution types (als→docker, nersc→slurm, nsls-ii→podman, conda→conda)
 - Conda environment mappings
 - Container volume mounts and networks
 - Slurm job parameters
