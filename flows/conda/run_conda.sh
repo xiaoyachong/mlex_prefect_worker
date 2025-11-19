@@ -2,8 +2,8 @@
 source .env
 
 # Check if all arguments are provided
-if [ $# -ne 3 ]; then
-    echo "Usage: $0 <conda_environment> <python_file> <yaml_file>"
+if [ $# -ne 4 ]; then
+    echo "Usage: $0 <conda_environment> <python_file> <yaml_file> <folder_name>"
     exit 1
 fi
 
@@ -13,10 +13,11 @@ source "$CONDA_PATH/etc/profile.d/conda.sh"
 conda_environment=$1
 python_file=$2
 yaml_file=$3
+folder_name=$4
 
 # Change to algorithm directory if ALGORITHMS_DIR is set
-if [ -n "$ALGORITHMS_DIR" ]; then
-    cd "$ALGORITHMS_DIR" || exit 1
+if [ -n "$ALGORITHMS_DIR" ] && [ -n "$folder_name" ]; then
+    cd "$ALGORITHMS_DIR/$folder_name" || exit 1
     echo "Working directory: $(pwd)"
 fi
 

@@ -21,6 +21,7 @@ from flows.utils import (
     load_config,
     determine_best_environment,
     get_algorithm_details_from_mlflow,
+    extract_folder_name_from_image,
 )
 
 logger = logging.getLogger(__name__)
@@ -96,6 +97,9 @@ async def launch_parent_flow(params_list: list[dict]):
             # Get algorithm details and job details from MLflow
             algorithm_details, job_details = get_algorithm_details_from_mlflow_task(model_name, config)
             
+            # Extract folder name from image_name
+            folder_name = extract_folder_name_from_image(algorithm_details.get("image_name", ""))
+            
             # Get the appropriate python file name based on the task name
             if task_name == "execute":
                 python_file = algorithm_details.get("python_file", "")
@@ -118,6 +122,7 @@ async def launch_parent_flow(params_list: list[dict]):
                 conda_relevant_params = {
                     "conda_env_name": job_details["conda_env"],
                     "python_file_name": python_file,
+                    "folder_name": folder_name,
                     "params": params
                 }
                 # Validate parameters with the schema

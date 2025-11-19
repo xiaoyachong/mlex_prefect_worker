@@ -41,6 +41,7 @@ async def launch_conda(
             conda_params.conda_env_name,
             conda_params.python_file_name,
             temp_file.name,
+            conda_params.folder_name,  # Pass folder name to script
         ]
         logger.info(f"Launching with command: {cmd}")
         process = await run_process(cmd, stream_output=True)

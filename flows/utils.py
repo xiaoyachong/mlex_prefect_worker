@@ -63,6 +63,28 @@ def load_config():
         return {}
 
 
+def extract_folder_name_from_image(image_name: str) -> str:
+    """
+    Extract folder name from image_name.
+    For example: ghcr.io/mlexchange/mlex_dlsia_segmentation_prototype -> mlex_dlsia_segmentation_prototype
+    
+    Args:
+        image_name: Full image name from MLflow
+    
+    Returns:
+        Folder name extracted from image_name
+    """
+    if not image_name:
+        return ""
+    
+    # Split by '/' and get the last part
+    parts = image_name.split('/')
+    if len(parts) > 0:
+        return parts[-1]
+    
+    return ""
+
+
 def determine_best_environment(hpc_type: str):
     """
     Determine the best execution environment based on hpc_type.
