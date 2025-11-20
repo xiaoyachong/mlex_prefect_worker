@@ -4,7 +4,6 @@ import json
 
 from prefect import flow, task, get_run_logger
 from prefect.deployments import run_deployment
-from prefect.states import Failed
 
 # Import the Prefect client to check flow run states
 from prefect.client import get_client
@@ -140,9 +139,12 @@ async def launch_parent_flow(params_list: list[dict]):
                 }
                 flow_run = await run_deployment(
                     name="launch_conda/launch_conda",
-                    parameters=deployment_data
+                    parameters=deployment_data,
+                    poll_interval=60
                 )
                 
+                if flow_run.state.is_failed():
+                    raise RuntimeError(f"Child flow failed at step {i+1}")
                     
                 flow_run_id = str(flow_run.id)
                 
@@ -172,9 +174,12 @@ async def launch_parent_flow(params_list: list[dict]):
                 }
                 flow_run = await run_deployment(
                     name="Docker flow/launch_docker",
-                    parameters=deployment_data
+                    parameters=deployment_data,
+                    poll_interval=60
                 )
                 
+                if flow_run.state.is_failed():
+                    raise RuntimeError(f"Child flow failed at step {i+1}")
                     
                 flow_run_id = str(flow_run.id)
                 
@@ -204,9 +209,12 @@ async def launch_parent_flow(params_list: list[dict]):
                 }
                 flow_run = await run_deployment(
                     name="Podman flow/launch_podman", 
-                    parameters=deployment_data
+                    parameters=deployment_data,
+                    poll_interval=60
                 )
                 
+                if flow_run.state.is_failed():
+                    raise RuntimeError(f"Child flow failed at step {i+1}")
                     
                 flow_run_id = str(flow_run.id)
                 
@@ -254,21 +262,23 @@ async def launch_parent_flow(params_list: list[dict]):
                 }
                 flow_run = await run_deployment(
                     name="launch_slurm/launch_slurm",
-                    parameters=deployment_data
+                    parameters=deployment_data,
+                    poll_interval=60
                 )
                 
+                if flow_run.state.is_failed():
+                    raise RuntimeError(f"Child flow failed at step {i+1}")
                     
                 flow_run_id = str(flow_run.id)
                 
             else:
-                prefect_logger.error("Flow type not supported")
                 raise ValueError("Flow type not supported")
 
             prefect_logger.info(f"Step {i+1} completed with flow run ID: {flow_run_id}")
             
         except Exception as e:
             prefect_logger.error(f"Error in step {i+1}: {str(e)}")
-            return Failed(message=f"Error in step {i+1}: {str(e)}")
+            raise
     
     prefect_logger.info(f"All steps completed successfully. Final flow run ID: {flow_run_id}")
     return flow_run_id
