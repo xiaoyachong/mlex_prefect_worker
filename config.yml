@@ -8,11 +8,9 @@ worker:
 # Conda environment settings
 conda:
   conda_env_name:
-    pytorch_autoencoder: "mlex_pytorch_autoencoders"
-    pca: "mlex_dimension_reduction_pca"
-    umap: "mlex_dimension_reduction_umap"
-    clustering: "mlex_clustering"
-    dlsia: "dlsia"
+    DLSIA MSDNet_0.0.1: "dlsia"
+    DLSIA TUNet_0.0.1: "dlsia"
+    DLSIA TUNet3+_0.0.1: "dlsia"
 
 # Docker/Podman container settings
 container:

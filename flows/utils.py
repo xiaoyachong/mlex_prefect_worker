@@ -117,34 +117,31 @@ def determine_best_environment(hpc_type: str):
         return FlowType.conda
 
 
-def _get_conda_env_for_model(model_name: str, config: dict) -> str:
+def _get_conda_env_for_model(model_name: str, config: dict, model_version: str = "") -> str:
     """
     Simple helper function to determine the appropriate conda environment for a model.
     
     Args:
         model_name: The name of the model
         config: The configuration dictionary from config.yml
+        model_version: The version of the model from MLflow tags (optional)
         
     Returns:
         The appropriate conda environment name
     """
     conda_envs = config.get("conda", {}).get("conda_env_name", {})
     
-    # Determine model type from the model name
-    if "dlsia" in model_name.lower():
-        return conda_envs.get("dlsia", "")
-    elif "autoencoder" in model_name.lower():
-        return conda_envs.get("pytorch_autoencoder", "")
-    elif "pca" in model_name.lower():
-        return conda_envs.get("pca", "")
-    elif "umap" in model_name.lower():
-        return conda_envs.get("umap", "")
-    elif any(cluster_type in model_name.lower() for cluster_type in ["cluster", "dbscan", "hdbscan", "kmeans"]):
-        return conda_envs.get("clustering", "")
+    # Try direct lookup by model_name_version first if version is provided
+    if model_version:
+        versioned_key = f"{model_name}_{model_version}"
+        if versioned_key in conda_envs:
+            return conda_envs[versioned_key]
     
-    # Default to first conda environment if available
-    if conda_envs:
-        return next(iter(conda_envs.values()))
+    # Try direct lookup by model name
+    if model_name in conda_envs:
+        return conda_envs[model_name]
+    
+    # Return empty string if no match found
     return ""
 
 
@@ -185,12 +182,17 @@ def get_algorithm_details_from_mlflow(model_name: str, config: dict):
         version = versions[0]
         logger.info(f"Found version {version.version} for model {model_name}")
         
-        # Get the run to access parameters
+        # Get the run to access parameters and tags
         run = client.get_run(version.run_id)
         logger.info(f"Retrieved run with ID: {run.info.run_id}")
         
         # Extract the relevant parameters
         params = run.data.params
+        
+        # Extract algorithm version from tags
+        tags = run.data.tags
+        algorithm_version = tags.get("version", "")
+        logger.info(f"Algorithm version from tags: {algorithm_version}")
         
         # Get algorithm details from MLflow - only the core information
         algorithm_details = {
@@ -224,8 +226,8 @@ def get_algorithm_details_from_mlflow(model_name: str, config: dict):
             "max_time": config.get("slurm", {}).get("max_time", "1:00:00"),
             "submission_ssh_key": config.get("slurm", {}).get("submission_ssh_key", ""),
             "forward_ports": config.get("slurm", {}).get("forward_ports", "[]"),
-            # Get conda environment based on the model type
-            "conda_env": _get_conda_env_for_model(model_name, config)
+            # Get conda environment based on the model type and version from tags
+            "conda_env": _get_conda_env_for_model(model_name, config, algorithm_version)
         }
         
         logger.info(f"Successfully retrieved details for model {model_name}")
