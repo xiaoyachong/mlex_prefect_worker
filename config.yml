@@ -16,7 +16,8 @@ conda:
 container:
   # Use environment variables for dynamic paths
   # These will be expanded at runtime from .env file
-  volumes: []
+  volumes:
+    - "${TILED_STORAGE_DIR}:/tiled_storage"
   network: "${CONTAINER_NETWORK}"
 
 # Slurm job scheduler settings
