@@ -11,6 +11,9 @@ conda:
     DLSIA MSDNet_0.0.1: "dlsia"
     DLSIA TUNet_0.0.1: "dlsia"
     DLSIA TUNet3+_0.0.1: "dlsia"
+    DLSIA MSDNet_0.1.0: "dlsia_0.1.0"
+    DLSIA TUNet_0.1.0: "dlsia_0.1.0"
+    DLSIA TUNet3+_0.1.0: "dlsia_0.1.0"
 
 # Docker/Podman container settings
 container:
