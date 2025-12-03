@@ -117,9 +117,15 @@ async def launch_parent_flow(params_list: list[dict]):
                 raise ValueError(f"No Python file found for task {task_name}")
             
             if target_env == FlowType.conda:
+                # Check if conda_env is available before proceeding
+                conda_env = job_details["conda_env"]
+                if not conda_env:
+                    prefect_logger.error(f"No conda environment found for model {model_name}. Please update config.yml with the appropriate conda environment mapping.")
+                    raise ValueError(f"No conda environment configured for model {model_name}")
+                
                 # Prepare conda parameters - use job_details for conda_env
                 conda_relevant_params = {
-                    "conda_env_name": job_details["conda_env"],
+                    "conda_env_name": conda_env,
                     "python_file_name": python_file,
                     "folder_name": folder_name,
                     "params": params
@@ -219,6 +225,12 @@ async def launch_parent_flow(params_list: list[dict]):
                 flow_run_id = str(flow_run.id)
                 
             elif target_env == FlowType.slurm:
+                # Check if conda_env is available before proceeding (Slurm also uses conda)
+                conda_env = job_details["conda_env"]
+                if not conda_env:
+                    prefect_logger.error(f"No conda environment found for model {model_name}. Please update config.yml with the appropriate conda environment mapping.")
+                    raise ValueError(f"No conda environment configured for model {model_name}")
+                
                 # Parse string JSON values if needed
                 partitions = job_details["partitions"]
                 if isinstance(partitions, str):
@@ -239,7 +251,7 @@ async def launch_parent_flow(params_list: list[dict]):
                     "partitions": partitions,
                     "reservations": reservations,
                     "max_time": job_details["max_time"],
-                    "conda_env_name": job_details["conda_env"],
+                    "conda_env_name": conda_env,
                     "forward_ports": forward_ports,
                     "submission_ssh_key": job_details["submission_ssh_key"],
                     "python_file_name": python_file,
